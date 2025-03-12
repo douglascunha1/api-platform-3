@@ -12,9 +12,11 @@ use ApiPlatform\Metadata\Put;
 use App\Repository\DragonTreasureRepository;
 use Carbon\Carbon;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Annotation\Groups;
+
 #[ORM\Entity(repositoryClass: DragonTreasureRepository::class)]
 #[ApiResource(
-    shortName: 'Treasure', # Seta um nome curto para o endpoint
+    shortName: 'treasure', # Seta um nome curto para o endpoint
     description: 'A rare and valuable treasure.', # Seta uma descrição para o recurso
     operations: [ # Seta as operações permitidas para o recurso
         new Get(uriTemplate: '/dragon-plunder/{id}'), # Seta um template de URI para a operação com um parâmetro dinâmico
@@ -23,6 +25,12 @@ use Doctrine\ORM\Mapping as ORM;
         new Put(),
         new Patch(),
         new Delete(),
+    ],
+    normalizationContext: [
+        'groups' => ['treasure:read'] # Seta o grupo de serialização para leitura
+    ],
+    denormalizationContext: [
+        'groups' => ['treasure:write'] # Seta o grupo de serialização para escrita
     ]
 )] # Expõe a entidade como um recurso da API
 class DragonTreasure
@@ -38,22 +46,26 @@ class DragonTreasure
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['treasure:read', 'treasure:write'])] # Seta o grupo de serialização para leitura
     private ?string $name = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups('treasure:read')] # Seta o grupo de serialização para leitura
     private ?string $description = null;
 
     #[ORM\Column]
+    #[Groups(['treasure:read', 'treasure:write'])] # Seta o grupo de serialização para leitura
     private ?int $value = null;
 
     #[ORM\Column]
+    #[Groups(['treasure:read', 'treasure:write'])] # Seta o grupo de serialização para leitura
     private ?int $coolFactor = null;
 
     #[ORM\Column]
     private ?\DateTimeImmutable $plunderedAt;
 
     #[ORM\Column]
-    private ?bool $isPublished = null;
+    private bool $isPublished = false;
 
     public function getId(): ?int
     {
@@ -77,7 +89,7 @@ class DragonTreasure
         return $this->description;
     }
 
-    public function setDescription(string $description): static
+    public function setDescription(string $description): self
     {
         $this->description = $description;
 
@@ -116,6 +128,7 @@ class DragonTreasure
     /**
      * A human-readable representation of the time since the treasure was plundered.
      */
+    #[Groups('treasure:read')] # Seta o grupo de serialização para leitura
     public function getPlunderedAtAgo(): string
     {
         return Carbon::instance($this->plunderedAt)->diffForHumans();
@@ -129,6 +142,20 @@ class DragonTreasure
     public function setIsPublished(bool $isPublished): static
     {
         $this->isPublished = $isPublished;
+
+        return $this;
+    }
+
+    #[Groups('treasure:write')] # Seta o grupo de serialização para escrita
+    public function setTextDescription(string $description): self
+    {
+        $this->description = nl2br($description);
+        return $this;
+    }
+
+    public function setPlunderedAt(\DateTimeImmutable $plunderedAt): self
+    {
+        $this->plunderedAt = $plunderedAt;
 
         return $this;
     }
