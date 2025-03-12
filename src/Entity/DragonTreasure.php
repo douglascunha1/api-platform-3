@@ -19,6 +19,7 @@ use Carbon\Carbon;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Serializer\Annotation\SerializedName;
+use Symfony\Component\Validator\Constraints as Assert;
 use function Symfony\Component\String\u;
 
 #[ORM\Entity(repositoryClass: DragonTreasureRepository::class)]
@@ -64,20 +65,25 @@ class DragonTreasure
     #[ORM\Column(length: 255)]
     #[Groups(['treasure:read', 'treasure:write'])] # Seta o grupo de serialização para leitura
     #[ApiFilter(SearchFilter::class, strategy: 'partial')] # Seta um filtro de pesquisa para o campo
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 2, max: 50, maxMessage: 'Describe your loot in 50 characters or less')]
     private ?string $name = null;
 
     #[ORM\Column(length: 255)]
     #[Groups('treasure:read')] # Seta o grupo de serialização para leitura
     #[ApiFilter(SearchFilter::class, strategy: 'partial')] # Seta um filtro de pesquisa para o campo
+    #[Assert\NotBlank]
     private ?string $description = null;
 
     #[ORM\Column]
     #[Groups(['treasure:read', 'treasure:write'])] # Seta o grupo de serialização para leitura
     #[ApiFilter(RangeFilter::class)] # Seta um filtro de intervalo para o campo
+    #[Assert\GreaterThanOrEqual(0)]
     private ?int $value = null;
 
     #[ORM\Column]
     #[Groups(['treasure:read', 'treasure:write'])] # Seta o grupo de serialização para leitura
+    #[Assert\LessThanOrEqual(10)]
     private ?int $coolFactor = null;
 
     #[ORM\Column]
