@@ -13,6 +13,7 @@ use App\Repository\DragonTreasureRepository;
 use Carbon\Carbon;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Annotation\Groups;
+use Symfony\Component\Serializer\Annotation\SerializedName;
 
 #[ORM\Entity(repositoryClass: DragonTreasureRepository::class)]
 #[ApiResource(
@@ -147,9 +148,11 @@ class DragonTreasure
     }
 
     #[Groups('treasure:write')] # Seta o grupo de serialização para escrita
+    #[SerializedName('description')] # Seta um nome alternativo para o campo
     public function setTextDescription(string $description): self
     {
         $this->description = nl2br($description);
+
         return $this;
     }
 

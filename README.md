@@ -494,3 +494,15 @@ class DragonTreasure
 - Após isso, setamos manualmente o grupo de serialização para cada propriedade da entidade. Note que aplicamos o grupo de serialização para leitura e escrita para alguns métodos.
 - Não só isso, criamos alguns métodos novos como `setTextDescription` e `setPlunderedAt` que setam a descrição e a data de criação do recurso, respectivamente.
 - Para saber mais sobre serialização, [clique aqui](https://symfony.com/doc/current/serializer.html).
+
+- Podemos aplicar alguns truques com serialização, por exemplo, no caso de description e textDescription, podemos fazer com que ao invés de exibir apenas o nome textDescription na requisição PUT por exemplo, ele exiba description. Para isso, basta adicionar a anotação `#[SerializedName('description')]` acima do método textDescription.
+```php
+#[Groups('treasure:write')] # Seta o grupo de serialização para escrita
+#[SerializedName('description')] # Seta um nome alternativo para o campo
+public function setTextDescription(string $description): self
+{
+    $this->description = nl2br($description);
+    
+    return $this;
+}
+```
