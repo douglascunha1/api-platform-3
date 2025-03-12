@@ -3,12 +3,35 @@
 namespace App\Entity;
 
 use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Delete;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Post;
+use ApiPlatform\Metadata\Put;
 use App\Repository\DragonTreasureRepository;
+use Carbon\Carbon;
 use Doctrine\ORM\Mapping as ORM;
 #[ORM\Entity(repositoryClass: DragonTreasureRepository::class)]
-#[ApiResource] # Expõe a entidade como um recurso da API
+#[ApiResource(
+    shortName: 'Treasure', # Seta um nome curto para o endpoint
+    description: 'A rare and valuable treasure.', # Seta uma descrição para o recurso
+    operations: [ # Seta as operações permitidas para o recurso
+        new Get(uriTemplate: '/dragon-plunder/{id}'), # Seta um template de URI para a operação com um parâmetro dinâmico
+        new GetCollection(uriTemplate: '/dragon-plunder'), # Seta um template de URI para a operação
+        new Post(),
+        new Put(),
+        new Patch(),
+        new Delete(),
+    ]
+)] # Expõe a entidade como um recurso da API
 class DragonTreasure
 {
+    public function __construct()
+    {
+        $this->plunderedAt = new \DateTimeImmutable();
+    }
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -27,7 +50,7 @@ class DragonTreasure
     private ?int $coolFactor = null;
 
     #[ORM\Column]
-    private ?\DateTimeImmutable $createdAt = null;
+    private ?\DateTimeImmutable $plunderedAt;
 
     #[ORM\Column]
     private ?bool $isPublished = null;
@@ -85,16 +108,17 @@ class DragonTreasure
         return $this;
     }
 
-    public function getCreatedAt(): ?\DateTimeImmutable
+    public function getPlunderedAt(): ?\DateTimeImmutable
     {
-        return $this->createdAt;
+        return $this->plunderedAt;
     }
 
-    public function setCreatedAt(\DateTimeImmutable $createdAt): static
+    /**
+     * A human-readable representation of the time since the treasure was plundered.
+     */
+    public function getPlunderedAtAgo(): string
     {
-        $this->createdAt = $createdAt;
-
-        return $this;
+        return Carbon::instance($this->plunderedAt)->diffForHumans();
     }
 
     public function getIsPublished(): ?bool
