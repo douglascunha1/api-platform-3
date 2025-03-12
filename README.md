@@ -692,3 +692,85 @@ private ?string $name = null;
 #[ApiFilter(SearchFilter::class, strategy: 'partial')] # Seta um filtro de pesquisa para o campo
 private ?string $description = null;
 ```
+
+- Podemos adicionar filtros de intervalo, por exemplo, para o campo value:
+```php
+#[ORM\Column]
+#[Groups(['treasure:read', 'treasure:write'])] # Seta o grupo de serialização para leitura
+#[ApiFilter(RangeFilter::class)] # Seta um filtro de intervalo para o campo
+private ?int $value = null;
+```
+
+- Podemos adicionar outras informações na nossa API, como é o caso do campo shortDescription que é uma descrição curta do recurso. Para isso, basta adicionar a seguinte configuração:
+```php
+#[Groups('treasure:read')] # Seta o grupo de serialização para leitura
+public function getShortDescription(): ?string
+{
+    // Trunca a descrição para 40 caracteres
+    return u($this->description)->truncate(40, '...');
+}
+```
+
+- Mas faz sentido duas descrições sendo retornadas? Bem, podemos limitar quais campos queremos que sejam retornados, para isso, basta adicionar a seguinte configuração logo acima da classe:
+```php
+// Habilita o filtro de propriedades que permite selecionar quais campos serão retornados
+#[ApiFilter(PropertyFilter::class)]
+```
+
+- Podemos adicionar outros formatos além de html, json e jsonld, como é o caso do formato jsonhal. Para isso, basta adicionar o trecho `jsonhal: ['application/hal+json']` no arquivo `config/packages/api_platform.yaml`:
+```yaml
+api_platform:
+    title: Hello API Platform
+    version: 1.0.0
+    formats:
+        jsonld: ['application/ld+json']
+        json: ['application/json']
+        html: ['text/html']
+        jsonhal: ['application/hal+json'] # Adiciona o formato jsonhal
+    docs_formats:
+        jsonld: ['application/ld+json']
+        jsonopenapi: ['application/vnd.openapi+json']
+        html: ['text/html']
+        jsonhal: ['application/hal+json'] # Adiciona o formato jsonhal
+    defaults:
+        stateless: true
+        cache_headers:
+            vary: ['Content-Type', 'Authorization', 'Origin']
+        extra_properties:
+            standard_put: true
+            rfc_7807_compliant_errors: true
+    event_listeners_backward_compatibility_layer: false
+    keep_legacy_inflector: false
+```
+
+- Agora vamos adicionar o formato CSV, no entanto, apenas na nossa entidade DragonTreasure. Para isso, basta adicionar a seguinte configuração:
+```php
+#[ApiResource(
+    shortName: 'Treasure', # Seta um nome curto para o endpoint
+    description: 'A rare and valuable treasure.', # Seta uma descrição para o recurso
+    operations: [ # Seta as operações permitidas para o recurso
+        new Get(), # Seta um template de URI para a operação com um parâmetro dinâmico
+        new GetCollection(), # Seta um template de URI para a operação
+        new Post(),
+        new Put(),
+        new Patch(),
+        new Delete(),
+    ],
+    formats: [
+        'jsonld',
+        'json',
+        'html',
+        'jsonhal',
+        'csv' => 'text/csv', # Seta csv como um formato de resposta
+    ],
+    normalizationContext: [
+        'groups' => ['treasure:read'] # Seta o grupo de serialização para leitura
+    ],
+    denormalizationContext: [
+        'groups' => ['treasure:write'] # Seta o grupo de serialização para escrita
+    ], # Seta a quantidade de itens por página
+    paginationItemsPerPage: 10,
+)] # Expõe a entidade como um recurso da API
+```
+
+- Ou seja, em ApiResource, adicionamos uma chave chamada formats e setamos os valores possíveis de resposta, no caso, jsonld, json, html, jsonhal e csv.

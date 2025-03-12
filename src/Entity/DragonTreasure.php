@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use ApiPlatform\Doctrine\Orm\Filter\BooleanFilter;
+use ApiPlatform\Doctrine\Orm\Filter\RangeFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\ApiResource;
@@ -12,32 +13,42 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use ApiPlatform\Metadata\Put;
+use ApiPlatform\Serializer\Filter\PropertyFilter;
 use App\Repository\DragonTreasureRepository;
 use Carbon\Carbon;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Serializer\Annotation\SerializedName;
+use function Symfony\Component\String\u;
 
 #[ORM\Entity(repositoryClass: DragonTreasureRepository::class)]
 #[ApiResource(
-    shortName: 'treasure', # Seta um nome curto para o endpoint
+    shortName: 'Treasure', # Seta um nome curto para o endpoint
     description: 'A rare and valuable treasure.', # Seta uma descrição para o recurso
     operations: [ # Seta as operações permitidas para o recurso
-        new Get(uriTemplate: '/dragon-plunder/{id}'), # Seta um template de URI para a operação com um parâmetro dinâmico
-        new GetCollection(uriTemplate: '/dragon-plunder'), # Seta um template de URI para a operação
+        new Get(), # Seta um template de URI para a operação com um parâmetro dinâmico
+        new GetCollection(), # Seta um template de URI para a operação
         new Post(),
         new Put(),
         new Patch(),
         new Delete(),
+    ],
+    formats: [
+        'jsonld',
+        'json',
+        'html',
+        'jsonhal',
+        'csv' => 'text/csv', # Seta csv como um formato de resposta
     ],
     normalizationContext: [
         'groups' => ['treasure:read'] # Seta o grupo de serialização para leitura
     ],
     denormalizationContext: [
         'groups' => ['treasure:write'] # Seta o grupo de serialização para escrita
-    ],
-    paginationItemsPerPage: 10, # Seta a quantidade de itens por página
+    ], # Seta a quantidade de itens por página
+    paginationItemsPerPage: 10,
 )] # Expõe a entidade como um recurso da API
+#[ApiFilter(PropertyFilter::class)] # Habilita o filtro de propriedades que permite selecionar quais campos serão retornados
 class DragonTreasure
 {
     public function __construct()
@@ -62,6 +73,7 @@ class DragonTreasure
 
     #[ORM\Column]
     #[Groups(['treasure:read', 'treasure:write'])] # Seta o grupo de serialização para leitura
+    #[ApiFilter(RangeFilter::class)] # Seta um filtro de intervalo para o campo
     private ?int $value = null;
 
     #[ORM\Column]
@@ -95,6 +107,13 @@ class DragonTreasure
     public function getDescription(): ?string
     {
         return $this->description;
+    }
+
+    #[Groups('treasure:read')] # Seta o grupo de serialização para leitura
+    public function getShortDescription(): ?string
+    {
+        // Trunca a descrição para 40 caracteres
+        return u($this->description)->truncate(40, '...');
     }
 
     public function setDescription(string $description): self
