@@ -27,7 +27,10 @@ use function Symfony\Component\String\u;
     shortName: 'Treasure', # Seta um nome curto para o endpoint
     description: 'A rare and valuable treasure.', # Seta uma descrição para o recurso
     operations: [ # Seta as operações permitidas para o recurso
-        new Get(), # Seta um template de URI para a operação com um parâmetro dinâmico
+        # Seta os grupos de contexto de normalização para as operações
+        new Get(
+            normalizationContext: ['groups' => ['treasure:read', 'treasure:item:get']] # endpoint, coleção, http method
+        ),
         new GetCollection(), # Seta um template de URI para a operação
         new Post(),
         new Put(),
@@ -63,7 +66,7 @@ class DragonTreasure
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['treasure:read', 'treasure:write'])] # Seta o grupo de serialização para leitura
+    #[Groups(['treasure:read', 'treasure:write', 'user:read'])] # Seta o grupo de serialização para leitura
     #[ApiFilter(SearchFilter::class, strategy: 'partial')] # Seta um filtro de pesquisa para o campo
     #[Assert\NotBlank]
     #[Assert\Length(min: 2, max: 50, maxMessage: 'Describe your loot in 50 characters or less')]
@@ -76,7 +79,7 @@ class DragonTreasure
     private ?string $description = null;
 
     #[ORM\Column]
-    #[Groups(['treasure:read', 'treasure:write'])] # Seta o grupo de serialização para leitura
+    #[Groups(['treasure:read', 'treasure:write', 'user:read'])] # Seta o grupo de serialização para leitura
     #[ApiFilter(RangeFilter::class)] # Seta um filtro de intervalo para o campo
     #[Assert\GreaterThanOrEqual(0)]
     private ?int $value = null;

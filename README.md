@@ -1672,3 +1672,46 @@ public function load(ObjectManager $manager): void
 #[Groups(['user:read'])] # Seta o grupo de serialização para leitura
 private Collection $dragonTreasures;
 ```
+
+- Mas e se no lugar de exibir o IRI, que tal colocarmos os dados do tesouro? Bem, podemos fazer isso. Para isso podemos embutir os dados oriundos de outra entidade. Para isso, basta adicionar a seguinte configuração na entidade DragonTreasure:
+```php
+#[ORM\Column(length: 255)]
+#[Groups(['treasure:read', 'treasure:write', 'user:read'])] # Seta o grupo de serialização para leitura
+#[ApiFilter(SearchFilter::class, strategy: 'partial')] # Seta um filtro de pesquisa para o campo
+#[Assert\NotBlank]
+#[Assert\Length(min: 2, max: 50, maxMessage: 'Describe your loot in 50 characters or less')]
+private ?string $name = null;
+
+#[ORM\Column]
+#[Groups(['treasure:read', 'treasure:write', 'user:read'])] # Seta o grupo de serialização para leitura
+#[ApiFilter(RangeFilter::class)] # Seta um filtro de intervalo para o campo
+#[Assert\GreaterThanOrEqual(0)]
+private ?int $value = null;
+```
+
+- Ou seja, ao passarmos o grupo de serialização `user:read`, o campo `dragonTreasures` irá exibir os dados do tesouro ao invés do IRI.
+- Agora iremos fazer o mesmo na entidade User, para exibir os dados do tesouro. Para isso, basta adicionar a seguinte configuração:
+```php
+#[ORM\Column(length: 255, unique: true)]
+#[Groups(['user:read', 'user:write', 'treasure:read'])]
+#[Assert\NotBlank]
+private ?string $username = null;
+```
+
+- Ou seja, ao passarmos o grupo de serialização `treasure:read`, o campo `owner` irá exibir o username do usuário ao invés do IRI.
+- Podemos também sobrescrever a normalização dentro da classe Get() da entidade DragonTreasure, vejamos:
+```php
+// Seta os grupos de contexto de normalização para as operações
+new Get(
+    normalizationContext: ['groups' => ['treasure:read', 'treasure:item:get']] // endpoint, coleção, http method
+),
+```
+
+- Note que passamos um groups com o nome `treasure:item:get`, ou seja, estamos sobrescrevendo o groups `treasure:read` para a operação de GET.
+- Já na entidade User, alteramos o groups para `user:item:get`:
+```php
+#[ORM\Column(length: 255, unique: true)]
+#[Groups(['user:read', 'user:write', 'treasure:item:get'])]
+#[Assert\NotBlank]
+private ?string $username = null;
+```
