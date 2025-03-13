@@ -93,6 +93,11 @@ class DragonTreasure
     #[ApiFilter(BooleanFilter::class)]
     private bool $isPublished = false;
 
+    #[ORM\ManyToOne(inversedBy: 'dragonTreasures')]
+    #[ORM\JoinColumn(nullable: false)]
+    #[Groups(['treasure:read', 'treasure:write'])] # Seta o grupo de serialização para leitura e escrita
+    private ?User $owner = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -191,6 +196,18 @@ class DragonTreasure
     public function setPlunderedAt(\DateTimeImmutable $plunderedAt): self
     {
         $this->plunderedAt = $plunderedAt;
+
+        return $this;
+    }
+
+    public function getOwner(): ?User
+    {
+        return $this->owner;
+    }
+
+    public function setOwner(?User $owner): static
+    {
+        $this->owner = $owner;
 
         return $this;
     }

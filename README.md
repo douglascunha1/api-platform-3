@@ -977,3 +977,698 @@ class DragonTreasure
 ```
 
 - Note que usamos o atributo `Assert` para aplicar validações. No caso, aplicamos validações de `NotBlank`, `Length`, `GreaterThanOrEqual` e `LessThanOrEqual`.
+
+- Agora vamos modelar um usuário, para isso digite no terminal o comando `sc make:user`, esse comando irá criar uma entidade de User, UserRepository e vai modificar o arquivo `config/packages/security.yaml` para utilizar a entidade User. Essa classe já vem com algumas configurações de segurança por padrão. Em seguida, vamos criar uma entidade com o mesmo nome(apenas iremos adicionar o campo username na entidade User ja existente). Para isso, digite `sc make:entity` e siga as intruções.
+- Após isso, vamos rodar nossa migration para criar a tabela no banco de dados. Para isso, digite `sc make:migration` e em seguida `sc doctrine:migrations:migrate`.
+- Agora vamos criar uma factory para adicionar usuários no banco de dados. Para isso, digite `sc make:factory` e siga as instruções. Abaixo temos um exemplo de factory que foi modificada para se adequar ao projeto:
+```php
+<?php
+
+namespace App\Factory;
+
+use App\Entity\User;
+use App\Repository\UserRepository;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use Zenstruck\Foundry\ModelFactory;
+use Zenstruck\Foundry\Proxy;
+use Zenstruck\Foundry\RepositoryProxy;
+
+/**
+ * @extends ModelFactory<User>
+ *
+ * @method        User|Proxy create(array|callable $attributes = [])
+ * @method static User|Proxy createOne(array $attributes = [])
+ * @method static User|Proxy find(object|array|mixed $criteria)
+ * @method static User|Proxy findOrCreate(array $attributes)
+ * @method static User|Proxy first(string $sortedField = 'id')
+ * @method static User|Proxy last(string $sortedField = 'id')
+ * @method static User|Proxy random(array $attributes = [])
+ * @method static User|Proxy randomOrCreate(array $attributes = [])
+ * @method static UserRepository|RepositoryProxy repository()
+ * @method static User[]|Proxy[] all()
+ * @method static User[]|Proxy[] createMany(int $number, array|callable $attributes = [])
+ * @method static User[]|Proxy[] createSequence(array|callable $sequence)
+ * @method static User[]|Proxy[] findBy(array $attributes)
+ * @method static User[]|Proxy[] randomRange(int $min, int $max, array $attributes = [])
+ * @method static User[]|Proxy[] randomSet(int $number, array $attributes = [])
+ */
+final class UserFactory extends ModelFactory
+{
+    const USERNAMES = [
+        'FlamingInferno',
+        'ScaleSorcerer',
+        'TheDragonWithBadBreath',
+        'BurnedOut',
+        'ForgotMyOwnName',
+        'ClumsyClaws',
+        'HoarderOfUselessTrinkets',
+    ];
+
+    /**
+     * @see https://symfony.com/bundles/ZenstruckFoundryBundle/current/index.html#factories-as-services
+     *
+     * @todo inject services if required
+     */
+    public function __construct(
+        private UserPasswordHasherInterface $passwordHasher
+    )
+    {
+        parent::__construct();
+    }
+
+    /**
+     * @see https://symfony.com/bundles/ZenstruckFoundryBundle/current/index.html#model-factories
+     *
+     * @todo add your default values here
+     */
+    protected function getDefaults(): array
+    {
+        return [
+            'email' => self::faker()->email(),
+            'password' => 'password',
+            'username' => self::faker()->randomElement(self::USERNAMES) . self::faker()->randomNumber(3),
+        ];
+    }
+
+    /**
+     * @see https://symfony.com/bundles/ZenstruckFoundryBundle/current/index.html#initialization
+     */
+    protected function initialize(): self
+    {
+        return $this
+            ->afterInstantiate(function(User $user): void {
+                $user->setPassword($this->passwordHasher->hashPassword(
+                    $user,
+                    $user->getPassword()
+                ));
+            })
+            ;
+    }
+
+    protected static function getClass(): string
+    {
+        return User::class;
+    }
+}
+```
+
+- Após isso, no nosso arquivo `AppFixtures.php` adicione o seguinte trecho `UserFactory::createMany(10);`.
+- Em seguida, execute o comando `sc doctrine:fixtures:load` para carregar as fixtures no banco de dados.
+- Para que a nossa entidade `User` seja vísivel na nossa API, basta adicionar a seguinte configuração acima da entidade:
+```php
+#[ApiResource]
+```
+
+- Abaixo temos o código da nossa entidade, note que adicionamos normalizadores e denormalizadores para a entidade, validações em alguns campos e restrições:
+```php
+<?php
+
+namespace App\Entity;
+
+use ApiPlatform\Metadata\ApiResource;
+use App\Repository\UserRepository;
+use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
+use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\Serializer\Annotation\Groups;
+use Symfony\Component\Validator\Constraints as Assert;
+
+#[ORM\Entity(repositoryClass: UserRepository::class)]
+#[ORM\Table(name: '`user`')]
+// Aplica grupos de serialização e deserialização para a entidade
+#[ApiResource(
+    normalizationContext: ['groups' => ['user:read']],
+    denormalizationContext: ['groups' => ['user:write']],
+)]
+// Validações para o campo email
+#[UniqueEntity(
+    fields: ['email'],
+    message: 'There is already an account with this email'
+)]
+// Validações para o campo username
+#[UniqueEntity(
+    fields: ['username'],
+    message: 'There is already an account with this username'
+)]
+class User implements UserInterface, PasswordAuthenticatedUserInterface
+{
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column]
+    private ?int $id = null;
+
+    #[ORM\Column(length: 180, unique: true)]
+    #[Groups(['user:read', 'user:write'])] # Seta o grupo de serialização para leitura e escrita
+    #[Assert\NotBlank] # Adiciona uma validação de não nulo
+    #[Assert\Email] # Adiciona uma validação de email
+    private ?string $email = null;
+
+    #[ORM\Column]
+    private array $roles = [];
+
+    /**
+     * @var string The hashed password
+     */
+    #[ORM\Column]
+    #[Groups(['user:write'])] # Apenas o grupo de escrita pode ver a senha
+    private ?string $password = null;
+
+    #[ORM\Column(length: 255, unique: true)]
+    #[Groups(['user:read', 'user:write'])] # Seta o grupo de serialização para leitura e escrita
+    #[Assert\NotBlank] # Adiciona uma validação de não nulo
+    private ?string $username = null;
+
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    public function getEmail(): ?string
+    {
+        return $this->email;
+    }
+
+    public function setEmail(string $email): static
+    {
+        $this->email = $email;
+
+        return $this;
+    }
+
+    /**
+     * A visual identifier that represents this user.
+     *
+     * @see UserInterface
+     */
+    public function getUserIdentifier(): string
+    {
+        return (string) $this->email;
+    }
+
+    /**
+     * @see UserInterface
+     */
+    public function getRoles(): array
+    {
+        $roles = $this->roles;
+        // guarantee every user at least has ROLE_USER
+        $roles[] = 'ROLE_USER';
+
+        return array_unique($roles);
+    }
+
+    public function setRoles(array $roles): static
+    {
+        $this->roles = $roles;
+
+        return $this;
+    }
+
+    /**
+     * @see PasswordAuthenticatedUserInterface
+     */
+    public function getPassword(): string
+    {
+        return $this->password;
+    }
+
+    public function setPassword(string $password): static
+    {
+        $this->password = $password;
+
+        return $this;
+    }
+
+    /**
+     * @see UserInterface
+     */
+    public function eraseCredentials(): void
+    {
+        // If you store any temporary, sensitive data on the user, clear it here
+        // $this->plainPassword = null;
+    }
+
+    public function getUsername(): ?string
+    {
+        return $this->username;
+    }
+
+    public function setUsername(string $username): static
+    {
+        $this->username = $username;
+
+        return $this;
+    }
+}
+```
+
+- E relações, como posso adicionar relações entre entidades? Para isso, vamos modificar a entidade `DragonTreasure` para adicionar um relacionamento com a entidade `User`. Abaixo temos o código da entidade `DragonTreasure` e `User` modificada, note que adicionamos uma relação `ManyToOne`:
+```php
+<?php
+
+namespace App\Entity;
+
+use ApiPlatform\Doctrine\Orm\Filter\BooleanFilter;
+use ApiPlatform\Doctrine\Orm\Filter\RangeFilter;
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Metadata\ApiFilter;
+use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Delete;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Post;
+use ApiPlatform\Metadata\Put;
+use ApiPlatform\Serializer\Filter\PropertyFilter;
+use App\Repository\DragonTreasureRepository;
+use Carbon\Carbon;
+use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Annotation\Groups;
+use Symfony\Component\Serializer\Annotation\SerializedName;
+use Symfony\Component\Validator\Constraints as Assert;
+use function Symfony\Component\String\u;
+
+#[ORM\Entity(repositoryClass: DragonTreasureRepository::class)]
+#[ApiResource(
+    shortName: 'Treasure', # Seta um nome curto para o endpoint
+    description: 'A rare and valuable treasure.', # Seta uma descrição para o recurso
+    operations: [ # Seta as operações permitidas para o recurso
+        new Get(), # Seta um template de URI para a operação com um parâmetro dinâmico
+        new GetCollection(), # Seta um template de URI para a operação
+        new Post(),
+        new Put(),
+        new Patch(),
+        new Delete(),
+    ],
+    formats: [
+        'jsonld',
+        'json',
+        'html',
+        'jsonhal',
+        'csv' => 'text/csv', # Seta csv como um formato de resposta
+    ],
+    normalizationContext: [
+        'groups' => ['treasure:read'] # Seta o grupo de serialização para leitura
+    ],
+    denormalizationContext: [
+        'groups' => ['treasure:write'] # Seta o grupo de serialização para escrita
+    ], # Seta a quantidade de itens por página
+    paginationItemsPerPage: 10,
+)] # Expõe a entidade como um recurso da API
+#[ApiFilter(PropertyFilter::class)] # Habilita o filtro de propriedades que permite selecionar quais campos serão retornados
+class DragonTreasure
+{
+    public function __construct()
+    {
+        $this->plunderedAt = new \DateTimeImmutable();
+    }
+
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column]
+    private ?int $id = null;
+
+    #[ORM\Column(length: 255)]
+    #[Groups(['treasure:read', 'treasure:write'])] # Seta o grupo de serialização para leitura
+    #[ApiFilter(SearchFilter::class, strategy: 'partial')] # Seta um filtro de pesquisa para o campo
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 2, max: 50, maxMessage: 'Describe your loot in 50 characters or less')]
+    private ?string $name = null;
+
+    #[ORM\Column(length: 255)]
+    #[Groups('treasure:read')] # Seta o grupo de serialização para leitura
+    #[ApiFilter(SearchFilter::class, strategy: 'partial')] # Seta um filtro de pesquisa para o campo
+    #[Assert\NotBlank]
+    private ?string $description = null;
+
+    #[ORM\Column]
+    #[Groups(['treasure:read', 'treasure:write'])] # Seta o grupo de serialização para leitura
+    #[ApiFilter(RangeFilter::class)] # Seta um filtro de intervalo para o campo
+    #[Assert\GreaterThanOrEqual(0)]
+    private ?int $value = null;
+
+    #[ORM\Column]
+    #[Groups(['treasure:read', 'treasure:write'])] # Seta o grupo de serialização para leitura
+    #[Assert\LessThanOrEqual(10)]
+    private ?int $coolFactor = null;
+
+    #[ORM\Column]
+    private ?\DateTimeImmutable $plunderedAt;
+
+    #[ORM\Column]
+    #[ApiFilter(BooleanFilter::class)]
+    private bool $isPublished = false;
+
+    #[ORM\ManyToOne(inversedBy: 'dragonTreasures')]
+    #[ORM\JoinColumn(nullable: false)]
+    private ?User $owner = null;
+
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    public function getName(): ?string
+    {
+        return $this->name;
+    }
+
+    public function setName(string $name): static
+    {
+        $this->name = $name;
+
+        return $this;
+    }
+
+    public function getDescription(): ?string
+    {
+        return $this->description;
+    }
+
+    #[Groups('treasure:read')] # Seta o grupo de serialização para leitura
+    public function getShortDescription(): ?string
+    {
+        // Trunca a descrição para 40 caracteres
+        return u($this->description)->truncate(40, '...');
+    }
+
+    public function setDescription(string $description): self
+    {
+        $this->description = $description;
+
+        return $this;
+    }
+
+    public function getValue(): ?int
+    {
+        return $this->value;
+    }
+
+    public function setValue(int $value): static
+    {
+        $this->value = $value;
+
+        return $this;
+    }
+
+    public function getCoolFactor(): ?int
+    {
+        return $this->coolFactor;
+    }
+
+    public function setCoolFactor(int $coolFactor): static
+    {
+        $this->coolFactor = $coolFactor;
+
+        return $this;
+    }
+
+    public function getPlunderedAt(): ?\DateTimeImmutable
+    {
+        return $this->plunderedAt;
+    }
+
+    /**
+     * A human-readable representation of the time since the treasure was plundered.
+     */
+    #[Groups('treasure:read')] # Seta o grupo de serialização para leitura
+    public function getPlunderedAtAgo(): string
+    {
+        return Carbon::instance($this->plunderedAt)->diffForHumans();
+    }
+
+    public function getIsPublished(): ?bool
+    {
+        return $this->isPublished;
+    }
+
+    public function setIsPublished(bool $isPublished): static
+    {
+        $this->isPublished = $isPublished;
+
+        return $this;
+    }
+
+    #[Groups('treasure:write')] # Seta o grupo de serialização para escrita
+    #[SerializedName('description')] # Seta um nome alternativo para o campo
+    public function setTextDescription(string $description): self
+    {
+        $this->description = nl2br($description);
+
+        return $this;
+    }
+
+    public function setPlunderedAt(\DateTimeImmutable $plunderedAt): self
+    {
+        $this->plunderedAt = $plunderedAt;
+
+        return $this;
+    }
+
+    public function getOwner(): ?User
+    {
+        return $this->owner;
+    }
+
+    public function setOwner(?User $owner): static
+    {
+        $this->owner = $owner;
+
+        return $this;
+    }
+}
+
+<?php
+
+namespace App\Entity;
+
+use ApiPlatform\Metadata\ApiResource;
+use App\Repository\UserRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
+use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
+use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\Serializer\Annotation\Groups;
+use Symfony\Component\Validator\Constraints as Assert;
+
+#[ORM\Entity(repositoryClass: UserRepository::class)]
+#[ORM\Table(name: '`user`')]
+#[ApiResource(
+    normalizationContext: ['groups' => ['user:read']],
+    denormalizationContext: ['groups' => ['user:write']],
+)]
+#[UniqueEntity(
+    fields: ['email'],
+    message: 'There is already an account with this email'
+)]
+#[UniqueEntity(
+    fields: ['username'],
+    message: 'There is already an account with this username'
+)]
+class User implements UserInterface, PasswordAuthenticatedUserInterface
+{
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column]
+    private ?int $id = null;
+
+    #[ORM\Column(length: 180, unique: true)]
+    #[Groups(['user:read', 'user:write'])]
+    #[Assert\NotBlank]
+    #[Assert\Email]
+    private ?string $email = null;
+
+    #[ORM\Column]
+    private array $roles = [];
+
+    /**
+     * @var string The hashed password
+     */
+    #[ORM\Column]
+    #[Groups(['user:write'])]
+    private ?string $password = null;
+
+    #[ORM\Column(length: 255, unique: true)]
+    #[Groups(['user:read', 'user:write'])]
+    #[Assert\NotBlank]
+    private ?string $username = null;
+
+    #[ORM\OneToMany(mappedBy: 'owner', targetEntity: DragonTreasure::class)]
+    private Collection $dragonTreasures;
+
+    public function __construct()
+    {
+        $this->dragonTreasures = new ArrayCollection();
+    }
+
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    public function getEmail(): ?string
+    {
+        return $this->email;
+    }
+
+    public function setEmail(string $email): static
+    {
+        $this->email = $email;
+
+        return $this;
+    }
+
+    /**
+     * A visual identifier that represents this user.
+     *
+     * @see UserInterface
+     */
+    public function getUserIdentifier(): string
+    {
+        return (string) $this->email;
+    }
+
+    /**
+     * @see UserInterface
+     */
+    public function getRoles(): array
+    {
+        $roles = $this->roles;
+        // guarantee every user at least has ROLE_USER
+        $roles[] = 'ROLE_USER';
+
+        return array_unique($roles);
+    }
+
+    public function setRoles(array $roles): static
+    {
+        $this->roles = $roles;
+
+        return $this;
+    }
+
+    /**
+     * @see PasswordAuthenticatedUserInterface
+     */
+    public function getPassword(): string
+    {
+        return $this->password;
+    }
+
+    public function setPassword(string $password): static
+    {
+        $this->password = $password;
+
+        return $this;
+    }
+
+    /**
+     * @see UserInterface
+     */
+    public function eraseCredentials(): void
+    {
+        // If you store any temporary, sensitive data on the user, clear it here
+        // $this->plainPassword = null;
+    }
+
+    public function getUsername(): ?string
+    {
+        return $this->username;
+    }
+
+    public function setUsername(string $username): static
+    {
+        $this->username = $username;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, DragonTreasure>
+     */
+    public function getDragonTreasures(): Collection
+    {
+        return $this->dragonTreasures;
+    }
+
+    public function addDragonTreasure(DragonTreasure $dragonTreasure): static
+    {
+        if (!$this->dragonTreasures->contains($dragonTreasure)) {
+            $this->dragonTreasures->add($dragonTreasure);
+            $dragonTreasure->setOwner($this);
+        }
+
+        return $this;
+    }
+
+    public function removeDragonTreasure(DragonTreasure $dragonTreasure): static
+    {
+        if ($this->dragonTreasures->removeElement($dragonTreasure)) {
+            // set the owning side to null (unless already changed)
+            if ($dragonTreasure->getOwner() === $this) {
+                $dragonTreasure->setOwner(null);
+            }
+        }
+
+        return $this;
+    }
+}
+```
+
+- Após isso, criamos nossa migration com o comando `sc make:migration` e em seguida precisamos rodar o comando `sc doctrine:database:drop --force` para dropar o banco de dados e em seguida `sc doctrine:database:create` para criar o banco de dados e por fim `sc doctrine:migrations:migrate` para rodar a migration. Precisamos rodar esse comando porque adicionamos um novo campo na entidade `DragonTreasure` e um relacionamento com a entidade `User`.
+- Agora vamos subir dados para o nosso banco, mas antes disso precisamos aplicar alguns ajustes no arquivo `DragonTreasureFactory.php`. Abaixo temos o código modificado:
+```php
+protected function defaults(): array|callable
+{
+    return [
+        'coolFactor' => self::faker()->numberBetween(1, 10),
+        'description' => self::faker()->paragraph(),
+        'isPublished' => self::faker()->boolean(),
+        'name' => self::faker()->randomElement(self::TREASURE_NAMES),
+        'plunderedAt' => \DateTimeImmutable::createFromMutable(self::faker()->dateTime()),
+        'value' => self::faker()->numberBetween(1000, 1000000),
+        'owner' => UserFactory::new(), # Cria um novo usuário para ser o dono do tesouro
+    ];
+}
+```
+
+- Agora vamos precisar mover o `DragonTreasureFactory` para abaixo do `UserFactory` no arquivo `AppFixtures.php` e em seguida, alterar o arquivo `AppFixtures` para que uma callback gere um owner aleatório, vejamos o código abaixo:
+```php
+public function load(ObjectManager $manager): void
+{
+    // Cria 10 registros de User
+    UserFactory::createMany(10);
+    // Cria 40 registros de DragonTreasure
+    DragonTreasureFactory::createMany(40, function () {
+        return [
+            'owner' => UserFactory::random(), # Define um usuário aleatório como dono do tesouro
+        ];
+    });
+}
+```
+
+- Agora podemos rodar o comando `sc doctrine:fixtures:load` para carregar as fixtures no banco de dados.
+- Se executarmos um GET na nossa API, teremos o seguinte resultado:
+```json
+{
+    "name": "set of golden utensils",
+    "description": "Aut saepe laudantium provident totam ea soluta. Voluptas sequi autem quia ex. Et sed exercitationem odit accusamus voluptatibus eligendi aut sapiente.",
+    "value": 117447,
+    "coolFactor": 3,
+    "owner": "/api/users/25",
+    "shortDescription": "Aut saepe laudantium provident totam...",
+    "plunderedAtAgo": "30 years ago"
+}
+```
+
+- Note que o owner não é um id, mas sim um IRI, ou seja, um link para o recurso.
+- IRI significa `Internationalized Resource Identifier`, ou seja, um identificador internacional de recursos.
+- Para exibir o campo dragonTreasures do usuário, basta adicionar a seguinte configuração na entidade User:
+```php
+#[ORM\OneToMany(mappedBy: 'owner', targetEntity: DragonTreasure::class)]
+#[Groups(['user:read'])] # Seta o grupo de serialização para leitura
+private Collection $dragonTreasures;
+```

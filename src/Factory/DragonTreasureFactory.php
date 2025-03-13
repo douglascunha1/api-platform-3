@@ -88,6 +88,7 @@ final class DragonTreasureFactory extends PersistentProxyObjectFactory
             'name' => self::faker()->randomElement(self::TREASURE_NAMES),
             'plunderedAt' => \DateTimeImmutable::createFromMutable(self::faker()->dateTime()),
             'value' => self::faker()->numberBetween(1000, 1000000),
+            'owner' => UserFactory::new(), # Cria um novo usuário para ser o dono do tesouro
         ];
     }
 
