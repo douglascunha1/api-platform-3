@@ -127,6 +127,12 @@ class DragonTreasure
         return u($this->description)->truncate(40, '...');
     }
 
+    #[Groups('treasure:read')] # Seta o grupo de serialização para leitura
+    public function getTreasureId(): ?int
+    {
+        return $this->id;
+    }
+
     public function setDescription(string $description): self
     {
         $this->description = $description;
