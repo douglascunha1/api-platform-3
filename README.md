@@ -1715,3 +1715,13 @@ new Get(
 #[Assert\NotBlank]
 private ?string $username = null;
 ```
+
+- Se quisermos alterar o owner em um método PUT por exemplo, na entidade DragonTreasure, seria necessário passar o IRI, mas para contornar isso e passarmos apenas o username, podemos modificar o a entidade `User` para permitir que tresure seja passado, ou seja, writable:
+```php
+#[ORM\Column(length: 255, unique: true)]
+#[Groups(['user:read', 'user:write', 'treasure:item:get', 'treasure:write'])]
+#[Assert\NotBlank]
+private ?string $username = null;
+```
+
+- Note que adicionamos o grupo `treasure:write` para a entidade User.
